@@ -1,0 +1,23 @@
+# Use Python 3.9 Slim Image
+FROM python:3.9-slim
+
+# Install Chromium and dependencies
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Working Directory
+WORKDIR /app
+
+# Copy all files
+COPY . .
+
+# Install Python requirements
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Expose Port
+EXPOSE 10000
+
+# Start command using Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--timeout", "120", "app:app"]
