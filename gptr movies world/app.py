@@ -6,7 +6,7 @@ from DrissionPage import ChromiumPage, ChromiumOptions
 
 app = Flask(__name__)
 
-# --- 1. THE UI ---
+# --- 1. THE UI (Glassmorphism + Pro Tips + Notices) ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -101,7 +101,6 @@ HTML_TEMPLATE = """
                 const data = await res.json();
                 document.getElementById('loader').style.display = "none";
                 if(data.count === 0) {
-                    // Show Debug Info if available
                     let msg = "No results found.";
                     if(data.debug_info) msg += " (Debug: " + data.debug_info + ")";
                     resultsDiv.innerHTML = `<p style='text-align:center;color:#fff;'>${msg} <br>Try again later or check spelling.</p>`;
@@ -145,12 +144,22 @@ BASE_URL = "https://scloudx.lol"
 
 def get_browser():
     co = ChromiumOptions()
-    # IMPORTANT: Cloud specific settings
-    co.headless(True)
+    
+    # ---------------------------------------------------------
+    # CLOUDFLARE BYPASS SETTINGS (XVFB MODE)
+    # ---------------------------------------------------------
+    # We turn OFF headless mode because we are using a Virtual Monitor (XVFB)
+    # This tricks Cloudflare into thinking it's a real user with a screen.
+    co.headless(False) 
+    
     co.set_argument('--no-sandbox')
     co.set_argument('--disable-gpu')
-    # --- FAKE USER AGENT (TO LOOK LIKE MAC) ---
+    co.set_argument('--disable-dev-shm-usage') # Prevents memory crashes
+    co.set_argument('--window-size=1280,800')
+    
+    # Fake User Agent (Pretend to be a Mac User)
     co.set_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    
     try: return ChromiumPage(co)
     except: return None
 
@@ -159,10 +168,10 @@ def search_logic(query):
     if not page: return [], "Browser Failed"
     try:
         page.get(BASE_URL)
-        # Check if we are blocked
         title = page.title
         print(f"DEBUG: Page Title is {title}")
         
+        # Check Block
         if "Just a moment" in title or "Access denied" in title:
             page.quit()
             return [], f"Blocked by Cloudflare ({title})"
@@ -205,7 +214,6 @@ def extract_link_logic(file_url):
     page = get_browser()
     if not page: return None
     try:
-        # User Agent is already set in get_browser
         page.get(BASE_URL)
         time.sleep(2)
         page.get(file_url)
@@ -231,7 +239,6 @@ def home():
 def api_search():
     query = request.args.get('q')
     if not query: return jsonify({"count": 0, "results": []})
-    
     results, debug_info = search_logic(query)
     return jsonify({"count": len(results), "results": results, "debug_info": debug_info})
 
