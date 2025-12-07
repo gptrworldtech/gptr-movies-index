@@ -6,7 +6,8 @@ from DrissionPage import ChromiumPage, ChromiumOptions
 
 app = Flask(__name__)
 
-# --- 1. THE UI ---
+# --- 1. THE UI (HTML Template - No Changes Needed Here) ---
+# (నీ పాత HTML కోడ్ బాగుంది, దాన్ని అలాగే ఉంచుకో లేదా కింద ఉన్నది వాడుకో)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -27,13 +28,18 @@ HTML_TEMPLATE = """
         .search-container:focus-within { border-color: var(--primary); box-shadow: 0 0 25px rgba(0, 242, 255, 0.2); }
         input { flex: 1; background: transparent; border: none; padding: 15px 25px; color: white; font-size: 1.1rem; outline: none; font-family: 'Outfit', sans-serif; }
         .search-btn { background: linear-gradient(135deg, var(--secondary), var(--primary)); border: none; padding: 0 40px; border-radius: 40px; color: white; font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.3s; }
-        .tips-box { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 15px; padding: 15px 25px; text-align: left; animation: fadeInUp 0.8s ease; margin-top: 20px; width: 85%; max-width: 650px; }
+        .search-btn:hover { transform: translateY(-2px); }
+        .info-wrapper { width: 85%; max-width: 650px; display: flex; flex-direction: column; gap: 15px; margin-top: 25px; }
+        .tips-box { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 15px; padding: 15px 25px; text-align: left; animation: fadeInUp 0.8s ease; }
+        .tips-title { color: var(--primary); font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; }
         .tips-list { margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 0.85rem; line-height: 1.5; }
         .tips-list li span { color: #fff; font-weight: 500; }
-        .notice-box { background: rgba(255, 71, 87, 0.05); border: 1px solid rgba(255, 71, 87, 0.2); border-radius: 15px; padding: 15px 25px; text-align: left; animation: fadeInUp 1s ease; margin-top: 15px; width: 85%; max-width: 650px; }
+        .notice-box { background: rgba(255, 71, 87, 0.05); border: 1px solid rgba(255, 71, 87, 0.2); border-radius: 15px; padding: 15px 25px; text-align: left; animation: fadeInUp 1s ease; }
+        .notice-title { color: var(--danger); font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
         .notice-list { margin: 0; padding-left: 20px; color: #ffcccb; font-size: 0.85rem; line-height: 1.5; }
         #results { width: 95%; max-width: 1000px; margin-top: 30px; display: grid; grid-template-columns: 1fr; gap: 15px; padding-bottom: 50px; }
         .card { background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid var(--border); border-radius: 16px; padding: 15px 20px; transition: all 0.3s ease; display: grid; grid-template-columns: 50px 1fr auto; align-items: center; gap: 20px; }
+        .card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .card-icon { font-size: 1.5rem; color: var(--primary); display: flex; justify-content: center; align-items: center; background: rgba(0, 242, 255, 0.1); width: 50px; height: 50px; border-radius: 12px; }
         .title { font-size: 1rem; font-weight: 500; color: #fff; line-height: 1.4; margin-bottom: 8px; word-wrap: break-word; }
         .meta-tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -76,6 +82,7 @@ HTML_TEMPLATE = """
     <div id="results"></div>
 
     <script>
+        // JS Logic to call API
         function handleEnter(e) { if(e.key === 'Enter') searchMovies(); }
         function generateTags(title, size) {
             let tagsHtml = ""; const t = title.toLowerCase();
@@ -101,8 +108,7 @@ HTML_TEMPLATE = """
                 document.getElementById('loader').style.display = "none";
                 if(data.count === 0) {
                     let msg = "No results found.";
-                    // Displaying the EXACT error from server
-                    if(data.debug_info) msg += "<br><span style='color:#ff4757;font-size:0.8rem;'>Error: " + data.debug_info + "</span>";
+                    if(data.debug_info) msg += "<br><span style='color:#ff4757;font-size:0.8rem;'>Debug: " + data.debug_info + "</span>";
                     resultsDiv.innerHTML = `<p style='text-align:center;color:#fff;'>${msg}</p>`;
                     document.getElementById('status').innerText = "❌ Failed";
                     return;
@@ -145,30 +151,37 @@ BASE_URL = "https://scloudx.lol"
 def get_browser():
     try:
         co = ChromiumOptions()
-        # CLOUD CONFIGURATION (With XVFB)
-        co.headless(False) # Fake Screen Mode
+        
+        # --- THE MAGIC SETTINGS FOR RENDER ---
+        # 1. Use the NEW Headless mode (fixes "Init Failed")
+        co.set_argument('--headless=new')
+        
+        # 2. Essential Docker arguments
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-gpu')
         co.set_argument('--disable-dev-shm-usage')
-        co.set_argument('--window-size=1280,800')
+        co.set_argument('--disable-setuid-sandbox')
+        co.set_argument('--no-zygote')
+        co.set_argument('--single-process')
+        
+        # 3. User Agent to look real
         co.set_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        # Explicitly pointing to Chromium if standard path fails
-        co.set_paths(browser_path='/usr/bin/chromium') 
+        # 4. Explicitly set browser path for Render Linux
+        co.set_paths(browser_path='/usr/bin/chromium')
         
         return ChromiumPage(co), None
     except Exception as e:
-        # Returning the actual error message
         return None, str(e)
 
 def search_logic(query):
     page, error = get_browser()
-    if not page: return [], f"Browser Init Failed: {error}"
+    if not page: return [], f"Browser Error: {error}"
     try:
         page.get(BASE_URL)
         title = page.title
         
-        # Anti-Bot Check
+        # Check Cloudflare Block
         if "Just a moment" in title or "Access denied" in title:
             page.quit()
             return [], f"Blocked by Cloudflare ({title})"
