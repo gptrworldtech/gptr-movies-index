@@ -6,7 +6,7 @@ from DrissionPage import ChromiumPage, ChromiumOptions
 
 app = Flask(__name__)
 
-# --- 1. THE UI (Glassmorphism + Pro Tips + Notices) ---
+# --- 1. THE UI ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -34,7 +34,6 @@ HTML_TEMPLATE = """
         .notice-list { margin: 0; padding-left: 20px; color: #ffcccb; font-size: 0.85rem; line-height: 1.5; }
         #results { width: 95%; max-width: 1000px; margin-top: 30px; display: grid; grid-template-columns: 1fr; gap: 15px; padding-bottom: 50px; }
         .card { background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid var(--border); border-radius: 16px; padding: 15px 20px; transition: all 0.3s ease; display: grid; grid-template-columns: 50px 1fr auto; align-items: center; gap: 20px; }
-        .card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .card-icon { font-size: 1.5rem; color: var(--primary); display: flex; justify-content: center; align-items: center; background: rgba(0, 242, 255, 0.1); width: 50px; height: 50px; border-radius: 12px; }
         .title { font-size: 1rem; font-weight: 500; color: #fff; line-height: 1.4; margin-bottom: 8px; word-wrap: break-word; }
         .meta-tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -102,9 +101,10 @@ HTML_TEMPLATE = """
                 document.getElementById('loader').style.display = "none";
                 if(data.count === 0) {
                     let msg = "No results found.";
-                    if(data.debug_info) msg += " (Debug: " + data.debug_info + ")";
-                    resultsDiv.innerHTML = `<p style='text-align:center;color:#fff;'>${msg} <br>Try again later or check spelling.</p>`;
-                    document.getElementById('status').innerText = "❌ No Results";
+                    // Displaying the EXACT error from server
+                    if(data.debug_info) msg += "<br><span style='color:#ff4757;font-size:0.8rem;'>Error: " + data.debug_info + "</span>";
+                    resultsDiv.innerHTML = `<p style='text-align:center;color:#fff;'>${msg}</p>`;
+                    document.getElementById('status').innerText = "❌ Failed";
                     return;
                 }
                 document.getElementById('status').innerText = `✅ Found ${data.count} movies!`;
@@ -143,35 +143,32 @@ HTML_TEMPLATE = """
 BASE_URL = "https://scloudx.lol"
 
 def get_browser():
-    co = ChromiumOptions()
-    
-    # ---------------------------------------------------------
-    # CLOUDFLARE BYPASS SETTINGS (XVFB MODE)
-    # ---------------------------------------------------------
-    # We turn OFF headless mode because we are using a Virtual Monitor (XVFB)
-    # This tricks Cloudflare into thinking it's a real user with a screen.
-    co.headless(False) 
-    
-    co.set_argument('--no-sandbox')
-    co.set_argument('--disable-gpu')
-    co.set_argument('--disable-dev-shm-usage') # Prevents memory crashes
-    co.set_argument('--window-size=1280,800')
-    
-    # Fake User Agent (Pretend to be a Mac User)
-    co.set_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    
-    try: return ChromiumPage(co)
-    except: return None
+    try:
+        co = ChromiumOptions()
+        # CLOUD CONFIGURATION (With XVFB)
+        co.headless(False) # Fake Screen Mode
+        co.set_argument('--no-sandbox')
+        co.set_argument('--disable-gpu')
+        co.set_argument('--disable-dev-shm-usage')
+        co.set_argument('--window-size=1280,800')
+        co.set_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        # Explicitly pointing to Chromium if standard path fails
+        co.set_paths(browser_path='/usr/bin/chromium') 
+        
+        return ChromiumPage(co), None
+    except Exception as e:
+        # Returning the actual error message
+        return None, str(e)
 
 def search_logic(query):
-    page = get_browser()
-    if not page: return [], "Browser Failed"
+    page, error = get_browser()
+    if not page: return [], f"Browser Init Failed: {error}"
     try:
         page.get(BASE_URL)
         title = page.title
-        print(f"DEBUG: Page Title is {title}")
         
-        # Check Block
+        # Anti-Bot Check
         if "Just a moment" in title or "Access denied" in title:
             page.quit()
             return [], f"Blocked by Cloudflare ({title})"
@@ -204,14 +201,14 @@ def search_logic(query):
                 return results, None
         
         page.quit()
-        return [], f"Search box not found (Title: {title})"
+        return [], f"Search box missing. Title: {title}"
     except Exception as e:
         try: page.quit()
         except: pass
-        return [], str(e)
+        return [], f"Runtime Error: {str(e)}"
 
 def extract_link_logic(file_url):
-    page = get_browser()
+    page, error = get_browser()
     if not page: return None
     try:
         page.get(BASE_URL)
