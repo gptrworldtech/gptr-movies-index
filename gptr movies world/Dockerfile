@@ -1,25 +1,23 @@
-# Python 3.9 Slim వాడుతున్నాం
+# 1. Python 3.9 Slim తీసుకుంటున్నాం
 FROM python:3.9-slim
 
-# Chrome, Driver మరియు Virtual Screen (XVFB) ఇన్‌స్టాల్ చేస్తున్నాం
+# 2. Chrome మాత్రమే ఇన్‌స్టాల్ చేస్తున్నాం (Xvfb అవసరం లేదు)
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
-    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
-# వర్కింగ్ డైరెక్టరీ
+# 3. వర్కింగ్ డైరెక్టరీ
 WORKDIR /app
 
-# ఫైల్స్ కాపీ చేస్తున్నాం
+# 4. ఫైల్స్ కాపీ
 COPY . .
 
-# Python ప్యాకేజీలు
+# 5. సాఫ్ట్‌వేర్స్ ఇన్‌స్టాల్
 RUN pip install --no-cache-dir -r requirements.txt
 
-# పోర్ట్
+# 6. పోర్ట్
 EXPOSE 10000
 
-# స్టార్ట్ కమాండ్ (ఇక్కడే మ్యాజిక్ ఉంది)
-# xvfb-run అంటే "వర్చువల్ స్క్రీన్ ఆన్ చేసి, అందులో మన యాప్ రన్ చెయ్యి" అని అర్థం
-CMD ["xvfb-run", "-a", "--server-args='-screen 0 1280x800x24'", "gunicorn", "--bind", "0.0.0.0:10000", "--timeout", "120", "app:app"]
+# 7. సింపుల్ స్టార్ట్ కమాండ్ (Xvfb తీసేసాం)
+CMD ["gunicorn", "--bind", "0.0.0.0:10000", "--timeout", "120", "app:app"]
